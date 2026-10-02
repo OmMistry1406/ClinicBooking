@@ -1,4 +1,9 @@
 -- RLS hardening: privileges + staff DELETE policy.
+-- Split of responsibility: 0001_init.sql creates the full schema (columns, constraints,
+-- partial unique index, rate_limits) and the staff SELECT and UPDATE policies
+-- (appointments_staff_select / appointments_staff_update, both `to authenticated`).
+-- This migration adds table privileges and the staff DELETE policy, completing
+-- SELECT/UPDATE/DELETE for authenticated staff.
 -- Public writes happen only server-side with the service role (bypasses RLS).
 -- anon (browser, unauthenticated) gets no table privileges at all, so direct
 -- REST requests fail with 401/403 (permission denied) instead of an empty result.

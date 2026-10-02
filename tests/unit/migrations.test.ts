@@ -7,12 +7,14 @@ const sql = readdirSync(dir)
   .filter((f) => f.endsWith('.sql'))
   .sort()
   .map((f) => readFileSync(join(dir, f), 'utf8'))
-  .join('\n');
+  .join('\n')
+  // Case-insensitive matching: SQL keywords may be upper or lower case.
+  .toLowerCase();
 
 describe('migrations', () => {
   it('defines a partial unique index for active slots', () => {
     expect(sql).toMatch(
-      /create unique index appointments_active_slot_uniq\s+on public\.appointments \(slot_start\)\s+where status in \('pending', 'confirmed'\)/,
+      /create unique index appointments_active_slot_uniq\s+on public\.appointments \(slot_start\)\s+where status in \('pending', 'confirmed'\)/i,
     );
   });
 
@@ -41,7 +43,7 @@ describe('migrations', () => {
 
   it('allows authenticated staff select/update/delete', () => {
     for (const op of ['select', 'update', 'delete']) {
-      expect(sql).toMatch(new RegExp(`for ${op} to authenticated`));
+      expect(sql).toMatch(new RegExp(`for ${op} to authenticated`, 'i'));
     }
     expect(sql).toContain('revoke all on table public.appointments from anon, authenticated');
     expect(sql).toContain(
