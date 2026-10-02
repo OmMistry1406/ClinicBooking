@@ -3,6 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +26,28 @@ function healthy() {
   });
 }
 
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+function listening(port) {
+  return new Promise((resolve) => {
+    const s = net.connect(Number(port), '127.0.0.1');
+    s.on('connect', () => {
+      s.destroy();
+      resolve(true);
+    });
+    s.on('error', () => resolve(false));
+  });
+}
+
 export async function setup() {
   if (await healthy()) return;
 
@@ -41,7 +64,9 @@ export async function setup() {
 
   // No Supabase configured: run against the in-memory stand-in so the suite is self-contained/offline.
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    const mockPort = env.MOCK_SUPABASE_PORT || '54321';
+    // Always use a free ephemeral port: 54321 is the local Supabase CLI's port and may be occupied,
+    // in which case the mock would crash and the app would talk to the wrong service.
+    const mockPort = env.MOCK_SUPABASE_PORT || String(await freePort());
     env.SUPABASE_URL = `http://127.0.0.1:${mockPort}`;
     env.SUPABASE_SERVICE_ROLE_KEY = 'mock-service-role-key';
     mock = spawn(process.execPath, [path.join(root, 'scripts', 'mock-supabase.mjs'), mockPort], {
@@ -49,7 +74,9 @@ export async function setup() {
       env,
       stdio: 'inherit',
     });
-    await new Promise((r) => setTimeout(r, 500));
+    for (let i = 0; i < 50 && !(await listening(mockPort)); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
   }
 
   if (!existsSync(path.join(root, '.next', 'BUILD_ID'))) {
