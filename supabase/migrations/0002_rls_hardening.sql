@@ -14,6 +14,17 @@ revoke all on table public.rate_limits from anon, authenticated;
 -- Staff (authenticated): read, update and delete only; never insert directly.
 grant select, update, delete on table public.appointments to authenticated;
 
+-- Re-assert all three staff policies here (idempotent: drop + create) so the RLS
+-- configuration is complete and reviewable in one place, regardless of 0001.
+drop policy if exists appointments_staff_select on public.appointments;
+create policy appointments_staff_select on public.appointments
+  for select to authenticated using (true);
+
+drop policy if exists appointments_staff_update on public.appointments;
+create policy appointments_staff_update on public.appointments
+  for update to authenticated using (true) with check (true);
+
+drop policy if exists appointments_staff_delete on public.appointments;
 create policy appointments_staff_delete on public.appointments
   for delete to authenticated using (true);
 
