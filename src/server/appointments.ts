@@ -129,6 +129,13 @@ export interface ListDeps {
  * The query runs with the staff user's JWT and the anon key so Postgres RLS applies.
  */
 export async function listAppointmentsForDate(date: unknown, deps: ListDeps): Promise<ListResult> {
+  // Input validation first: it reveals nothing about the data, and malformed requests are 400 for everyone.
+  if (typeof date !== 'string' || !isValidDateString(date)) {
+    return { ok: false, status: 400, error: 'Invalid date' };
+  }
+  const { min, max } = allowedDateRange(deps.now, deps.tz);
+  if (date < min || date > max) return { ok: false, status: 400, error: 'Date out of range' };
+
   if (!deps.token) return { ok: false, status: 401, error: 'Unauthorized' };
   try {
     if (!(await deps.isAuthenticated(deps.token))) return { ok: false, status: 401, error: 'Unauthorized' };
@@ -136,17 +143,76 @@ export async function listAppointmentsForDate(date: unknown, deps: ListDeps): Pr
     return { ok: false, status: 503, error: 'Service unavailable' };
   }
 
+  const url = deps.supabaseUrl ?? process.env.SUPABASE_URL;
+  const key = deps.anonKey ?? (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!url || !key) return { ok: false, status: 503, error: 'Service unavailable' };
+
+  return queryRange(date, date, deps, url, key);
+}
+
+export type SummaryView = 'day' | 'week';
+
+export interface Summary {
+  view: SummaryView;
+  from: string;
+  to: string;
+  total: number;
+  pending: number;
+  confirmed: number;
+  cancelled: number;
+  no_show: number;
+  list: StaffAppointment[];
+}
+
+export type SummaryResult =
+  | { ok: true; summary: Summary }
+  | { ok: false; status: 400 | 401 | 503; error: string };
+
+/** Monday..Sunday week (clinic local dates) containing `date`. */
+export function weekBounds(date: string): { from: string; to: string } {
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+  const fromMonday = (dow + 6) % 7;
+  const from = addDays(date, -fromMonday);
+  return { from, to: addDays(from, 6) };
+}
+
+/** Day or Mon-Sun week summary: total, count per status, and the sorted list. */
+export async function summarizeAppointments(view: unknown, date: unknown, deps: ListDeps): Promise<SummaryResult> {
+  if (view !== 'day' && view !== 'week') return { ok: false, status: 400, error: 'Invalid view' };
   if (typeof date !== 'string' || !isValidDateString(date)) {
     return { ok: false, status: 400, error: 'Invalid date' };
   }
   const { min, max } = allowedDateRange(deps.now, deps.tz);
   if (date < min || date > max) return { ok: false, status: 400, error: 'Date out of range' };
 
+  if (!deps.token) return { ok: false, status: 401, error: 'Unauthorized' };
+  try {
+    if (!(await deps.isAuthenticated(deps.token))) return { ok: false, status: 401, error: 'Unauthorized' };
+  } catch {
+    return { ok: false, status: 503, error: 'Service unavailable' };
+  }
   const url = deps.supabaseUrl ?? process.env.SUPABASE_URL;
   const key = deps.anonKey ?? (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!url || !key) return { ok: false, status: 503, error: 'Service unavailable' };
 
-  const { start, end } = dayBoundsUtc(date, deps.tz);
+  const { from, to } = view === 'day' ? { from: date, to: date } : weekBounds(date);
+  const res = await queryRange(from, to, deps, url, key);
+  if (!res.ok) return res;
+  const counts = { pending: 0, confirmed: 0, cancelled: 0, no_show: 0 };
+  for (const a of res.appointments) counts[a.status] += 1;
+  return { ok: true, summary: { view, from, to, total: res.appointments.length, ...counts, list: res.appointments } };
+}
+
+async function queryRange(
+  fromDate: string,
+  toDate: string,
+  deps: ListDeps,
+  url: string,
+  key: string,
+): Promise<ListResult> {
+  const start = dayBoundsUtc(fromDate, deps.tz).start;
+  const end = dayBoundsUtc(toDate, deps.tz).end;
+  const date = fromDate;
   const query =
     `select=id,slot_start,name,phone,email,notes,status` +
     `&slot_start=gte.${encodeURIComponent(start)}&slot_start=lt.${encodeURIComponent(end)}` +

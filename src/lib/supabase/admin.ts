@@ -27,7 +27,26 @@ export interface AppointmentRow {
   consent_at: string;
 }
 
-export type InsertResult = { ok: true } | { ok: false; code: 'slot_taken' | 'unavailable' };
+export type InsertResult = { ok: true } | { ok: false; code: 'slot_taken' | 'phone_limit' | 'unavailable' };
+
+export const MAX_ACTIVE_PER_PHONE = 3;
+
+/** Number of pending/confirmed appointments for a phone number; null when the store is unreachable. */
+export async function countActiveByPhone(phone: string, fetchImpl: typeof fetch = fetch): Promise<number | null> {
+  try {
+    const res = await fetchImpl(
+      adminUrl(
+        `/rest/v1/appointments?select=id&phone=eq.${encodeURIComponent(phone)}&status=in.(pending,confirmed)`,
+      ),
+      { headers: adminHeaders(), cache: 'no-store' },
+    );
+    if (!res.ok) return null;
+    const rows = (await res.json()) as unknown[];
+    return Array.isArray(rows) ? rows.length : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Selects ONLY slot_start (no PII) for a non-cancelled appointment with this token. */
 export async function findActiveSlotByToken(
@@ -43,6 +62,23 @@ export async function findActiveSlotByToken(
   if (!res.ok) throw new Error('lookup failed');
   const rows = (await res.json()) as Array<{ slot_start: string }>;
   return rows[0]?.slot_start ?? null;
+}
+
+/** Selects ONLY slot_start and status (no PII) for the appointment with this token, whatever its status. */
+export async function findAppointmentStateByToken(
+  token: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ slot_start: string; status: string } | null> {
+  const res = await fetchImpl(
+    adminUrl(
+      `/rest/v1/appointments?select=slot_start,status&cancel_token=eq.${encodeURIComponent(token)}&limit=1`,
+    ),
+    { headers: adminHeaders(), cache: 'no-store' },
+  );
+  if (!res.ok) throw new Error('lookup failed');
+  const rows = (await res.json()) as Array<{ slot_start: string; status: string }>;
+  const row = rows[0];
+  return row ? { slot_start: row.slot_start, status: row.status } : null;
 }
 
 /** Patient cancellation: single conditional UPDATE. Returns true if a row changed. */

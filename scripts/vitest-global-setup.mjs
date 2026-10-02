@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = '3000';
 let child = null;
+let mock = null;
 
 function healthy() {
   return new Promise((resolve) => {
@@ -38,6 +39,19 @@ export async function setup() {
   };
   const shell = process.platform === 'win32';
 
+  // No Supabase configured: run against the in-memory stand-in so the suite is self-contained/offline.
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    const mockPort = env.MOCK_SUPABASE_PORT || '54321';
+    env.SUPABASE_URL = `http://127.0.0.1:${mockPort}`;
+    env.SUPABASE_SERVICE_ROLE_KEY = 'mock-service-role-key';
+    mock = spawn(process.execPath, [path.join(root, 'scripts', 'mock-supabase.mjs'), mockPort], {
+      cwd: root,
+      env,
+      stdio: 'inherit',
+    });
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
   if (!existsSync(path.join(root, '.next', 'BUILD_ID'))) {
     const r = spawnSync('npm', ['run', 'build'], { cwd: root, env, stdio: 'inherit', shell });
     if (r.status !== 0) throw new Error('npm run build failed');
@@ -53,4 +67,5 @@ export async function setup() {
 
 export async function teardown() {
   if (child) child.kill('SIGTERM');
+  if (mock) mock.kill('SIGTERM');
 }

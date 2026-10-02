@@ -73,7 +73,7 @@ describe('loginStaff', () => {
     }
     const locked = await loginStaff({ email: 'staff@clinic.test', password: GOOD }, deps);
     expect(locked).toEqual({ ok: false, status: 429, error: LOCKOUT_MESSAGE });
-    expect(locked.ok === false && locked.error).toBe('Too many login attempts. Please try again in 10 minutes.');
+    expect(locked.ok === false && locked.error).toBe('Account locked after too many failed attempts. Please try again in 10 minutes.');
     expect(deps.signIn).toHaveBeenCalledTimes(5);
   });
 

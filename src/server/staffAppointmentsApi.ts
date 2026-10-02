@@ -4,6 +4,8 @@ import { ACCESS_COOKIE } from '@/lib/session';
 import { getUser } from '@/lib/supabase/gotrue';
 import {
   listAppointmentsForDate,
+  summarizeAppointments,
+  type SummaryResult,
   transitionAppointment,
   type ListResult,
   type TransitionResult,
@@ -16,6 +18,17 @@ export async function changeStaffAppointment(id: unknown, action: unknown): Prom
     token,
     isAuthenticated: async (t) => (await getUser(t)) !== null,
     now: new Date(),
+  });
+}
+
+/** Day / week summary (FR-10), authenticated from the session cookie. */
+export async function fetchStaffSummary(view: unknown, date: unknown): Promise<SummaryResult> {
+  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+  return summarizeAppointments(view, date, {
+    token,
+    isAuthenticated: async (t) => (await getUser(t)) !== null,
+    now: new Date(),
+    tz: loadConfig().clinicTz,
   });
 }
 

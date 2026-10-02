@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
 import { checkRateLimit, RateLimitUnavailableError } from '@/lib/ratelimit';
-import { insertAppointment } from '@/lib/supabase/admin';
+import { countActiveByPhone, insertAppointment, MAX_ACTIVE_PER_PHONE } from '@/lib/supabase/admin';
 import { verifyTurnstile } from '@/lib/turnstile';
 import { createBooking, UNAVAILABLE_MESSAGE } from '@/server/booking';
 
@@ -12,7 +12,9 @@ function clientIp(request: Request): string {
   return fwd || request.headers.get('x-real-ip') || 'unknown';
 }
 
+/** Field-level validation failures (400) carry only `fieldErrors`; every other failure carries `error`. */
 function fail(status: number, error: string, fieldErrors?: Record<string, string>) {
+  if (status === 400 && fieldErrors) return NextResponse.json({ fieldErrors }, { status });
   return NextResponse.json({ error, ...(fieldErrors ? { fieldErrors } : {}) }, { status });
 }
 
@@ -52,7 +54,12 @@ export async function POST(request: Request) {
   const result = await createBooking(form, {
     config,
     now: () => new Date(),
-    insert: (row) => insertAppointment(row),
+    insert: async (row) => {
+      const active = await countActiveByPhone(row.phone);
+      if (active === null) return { ok: false, code: 'unavailable' };
+      if (active >= MAX_ACTIVE_PER_PHONE) return { ok: false, code: 'phone_limit' };
+      return insertAppointment(row);
+    },
   });
   if (!result.ok) return fail(result.status, result.error, result.fieldErrors);
   return NextResponse.json(

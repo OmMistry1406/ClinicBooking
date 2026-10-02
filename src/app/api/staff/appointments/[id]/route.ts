@@ -8,7 +8,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   let action: unknown;
   try {
-    action = ((await request.json()) as { action?: unknown } | null)?.action;
+    const body = (await request.json()) as { action?: unknown; status?: unknown } | null;
+    // Also accept the target status ("confirmed" | "cancelled" | "no_show") in place of the action verb.
+    const byStatus: Record<string, string> = { confirmed: 'confirm', cancelled: 'cancel', no_show: 'no_show' };
+    action = body?.action ?? (typeof body?.status === 'string' ? byStatus[body.status] : undefined);
   } catch {
     action = undefined;
   }

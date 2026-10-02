@@ -56,6 +56,7 @@ export async function submitBooking(
       if (m) fieldErrors[k] = m;
     }
     let message = body.error;
+    if (!message && Object.keys(fieldErrors).length > 0) message = 'Please correct the highlighted fields.';
     if (res.status === 503 || !message) message = res.status === 503 ? UNAVAILABLE : 'Something went wrong. Please try again.';
     if (res.status === 403) message = body.error ?? 'CAPTCHA verification failed. Please try again.';
     return { kind: 'error', status: res.status, message, fieldErrors };

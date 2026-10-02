@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
-import { cancelAppointmentByToken, findActiveSlotByToken } from '@/lib/supabase/admin';
-import { cancelByToken, lookupAppointment, NOT_FOUND_MESSAGE } from '@/server/cancel';
+import {
+  cancelAppointmentByToken,
+  findActiveSlotByToken,
+  findAppointmentStateByToken,
+} from '@/lib/supabase/admin';
+import { cancelByToken, isPlausibleToken, NOT_FOUND_MESSAGE } from '@/server/cancel';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,9 +17,14 @@ const notFound = () => NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status:
 
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const res = await lookupAppointment(token, deps);
-  if (!res.found) return notFound();
-  return NextResponse.json({ slotStart: res.slotStart, status: 'active' });
+  if (!isPlausibleToken(token)) return notFound();
+  try {
+    const state = await findAppointmentStateByToken(token);
+    if (!state) return notFound();
+    return NextResponse.json({ slot_start: state.slot_start, status: state.status });
+  } catch {
+    return notFound();
+  }
 }
 
 export async function POST(_req: Request, { params }: { params: Promise<{ token: string }> }) {

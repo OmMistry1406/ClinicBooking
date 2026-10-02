@@ -1,8 +1,8 @@
 import type { AuthTokens, AuthUser } from '@/lib/supabase/gotrue';
 import { EMAIL_REGEX, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@/lib/validation';
 
-export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
-export const LOCKOUT_MESSAGE = 'Too many login attempts. Please try again in 10 minutes.';
+export const INVALID_CREDENTIALS_MESSAGE = 'Invalid credentials';
+export const LOCKOUT_MESSAGE = 'Account locked after too many failed attempts. Please try again in 10 minutes.';
 export const UNAVAILABLE_MESSAGE = 'Service temporarily unavailable. Please try again later.';
 export const LOGIN_MAX_ATTEMPTS = 5;
 export const LOGIN_WINDOW_SECONDS = 600;

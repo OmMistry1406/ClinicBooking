@@ -5,6 +5,8 @@ import { bookingSchema } from '@/lib/validation';
 import { isValidSlotStart } from './slots';
 
 export const SLOT_TAKEN_MESSAGE = 'This slot is no longer available. Please choose another.';
+export const PHONE_LIMIT_MESSAGE =
+  'This phone number already has the maximum of 3 active appointments. Please cancel one or call the clinic.';
 export const UNAVAILABLE_MESSAGE = 'Booking temporarily unavailable. Please try again in 5 minutes.';
 
 export interface NewAppointment {
@@ -21,7 +23,9 @@ export interface NewAppointment {
 export interface BookingDeps {
   config: AppConfig;
   now: () => Date;
-  insert: (row: NewAppointment) => Promise<{ ok: true } | { ok: false; code: 'slot_taken' | 'unavailable' }>;
+  insert: (
+    row: NewAppointment,
+  ) => Promise<{ ok: true } | { ok: false; code: 'slot_taken' | 'phone_limit' | 'unavailable' }>;
   generateToken?: () => string;
 }
 
@@ -91,5 +95,6 @@ export async function createBooking(input: unknown, deps: BookingDeps): Promise<
   if (result.code === 'slot_taken') {
     return { ok: false, status: 409, error: SLOT_TAKEN_MESSAGE, fieldErrors: { slot: SLOT_TAKEN_MESSAGE } };
   }
+  if (result.code === 'phone_limit') return { ok: false, status: 400, error: PHONE_LIMIT_MESSAGE };
   return { ok: false, status: 503, error: UNAVAILABLE_MESSAGE };
 }
