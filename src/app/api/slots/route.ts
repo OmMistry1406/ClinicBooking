@@ -39,7 +39,9 @@ export async function GET(request: Request) {
     const from = all[0]!;
     const to = new Date(Date.parse(all[all.length - 1]!) + 1000).toISOString();
     const booked = await fetchBooked(from, to);
-    return NextResponse.json({ slots: subtractBooked(all, booked) });
+    // Public format: ISO 8601 UTC without milliseconds (e.g. 2026-10-06T09:00:00Z).
+    const slots = subtractBooked(all, booked).map((s) => s.replace('.000Z', 'Z'));
+    return NextResponse.json({ slots });
   } catch {
     console.error('Failed to load slots');
     return NextResponse.json({ error: 'Could not load slots' }, { status: 503 });
