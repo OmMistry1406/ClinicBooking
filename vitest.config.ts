@@ -8,6 +8,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    globalSetup: ['./scripts/vitest-global-setup.mjs'],
+    testTimeout: 30000,
     include: ['tests/**/*.test.ts'],
     coverage: {
       include: ['src/server/slots.ts'],
