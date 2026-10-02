@@ -54,6 +54,7 @@ Copy `.env.example` to `.env.local` (git-ignored).
    `npx vercel link` locally to connect an existing project.
 2. `vercel.json` already sets install/build commands and security headers (HSTS). Vercel redirects
    HTTP to HTTPS automatically.
+   Vercel is configured in `vercel.json` to use `npm ci --no-audit --no-fund` for reproducible installs once `package-lock.json` is committed.
 3. Add all environment variables above under Project Settings → Environment Variables
    (Production and Preview). Set `CLINIC_TZ` explicitly.
 4. Deploy, then check `https://<your-domain>/api/health` returns `{"status":"ok"}`.
