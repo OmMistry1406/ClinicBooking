@@ -27,6 +27,18 @@ describe('migrations', () => {
     expect(sql).not.toMatch(/create policy[^;]*for insert/i);
   });
 
+  it('keeps rate_limits and its function away from clients', () => {
+    expect(sql).toContain('alter table public.rate_limits enable row level security');
+    expect(sql).toContain('revoke all on table public.rate_limits from anon, authenticated');
+    expect(sql).toContain('grant execute on function public.hit_rate_limit(text, int, int) to service_role');
+  });
+
+  it('disables public sign-up and requires 12+ char passwords', () => {
+    const toml = readFileSync(join(process.cwd(), 'supabase', 'config.toml'), 'utf8');
+    expect(toml).toMatch(/enable_signup = false/);
+    expect(toml).toMatch(/minimum_password_length = 12/);
+  });
+
   it('allows authenticated staff select/update/delete', () => {
     for (const op of ['select', 'update', 'delete']) {
       expect(sql).toMatch(new RegExp(`for ${op} to authenticated`));
