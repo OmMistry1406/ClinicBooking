@@ -9,6 +9,8 @@ Requires Node.js 20.9+ (npm is the package manager per the design; `pnpm` also w
 
 ```bash
 npm ci --no-audit --no-fund      # or: npm install / pnpm install
+# `npm ci` requires a committed package-lock.json. If it is missing, run
+# `npm install --package-lock-only` once and commit the generated file.
 cp .env.example .env.local       # then edit the values
 npm run dev                      # http://localhost:3000 (binds 0.0.0.0, honours PORT)
 ```
