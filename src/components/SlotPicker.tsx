@@ -13,10 +13,12 @@ interface Props {
   timeZone: string;
   onChange: (slot: string) => void;
   error?: string;
+  /** Increment to force a reload of the slot list (e.g. after a slot collision). */
+  refreshKey?: number;
 }
 
 /** Loads available slots for a date from GET /api/slots and shows times in clinic local time. */
-export function SlotPicker({ date, value, timeZone, onChange, error }: Props) {
+export function SlotPicker({ date, value, timeZone, onChange, error, refreshKey = 0 }: Props) {
   const [slots, setSlots] = useState<SlotOption[]>([]);
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
 
@@ -28,7 +30,7 @@ export function SlotPicker({ date, value, timeZone, onChange, error }: Props) {
     }
     const ctrl = new AbortController();
     setStatus('loading');
-    fetch(`/api/slots?date=${encodeURIComponent(date)}`, { signal: ctrl.signal })
+    fetch(`/api/slots?date=${encodeURIComponent(date)}`, { signal: ctrl.signal, cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) throw new Error('bad status');
         const body = (await res.json()) as { slots?: Array<string | SlotOption> };
@@ -40,7 +42,7 @@ export function SlotPicker({ date, value, timeZone, onChange, error }: Props) {
         if ((e as { name?: string }).name !== 'AbortError') setStatus('error');
       });
     return () => ctrl.abort();
-  }, [date]);
+  }, [date, refreshKey]);
 
   const fmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone });
 
