@@ -1,3 +1,4 @@
+import { allowedActions, isStaffAction } from '@/lib/appointmentActions';
 import { addDays, isValidDateString, localDate, zonedToUtc } from './slots';
 
 export const PAST_DAYS = 365;
@@ -18,6 +19,86 @@ export interface StaffAppointment {
 export type ListResult =
   | { ok: true; date: string; appointments: StaffAppointment[] }
   | { ok: false; status: 400 | 401 | 503; error: string };
+
+export type TransitionResult =
+  | { ok: true; appointment: StaffAppointment }
+  | { ok: false; status: 400 | 401 | 404 | 409 | 503; error: string };
+
+export interface TransitionDeps {
+  token: string | undefined;
+  isAuthenticated: (token: string) => Promise<boolean>;
+  now: Date;
+  fetchImpl?: typeof fetch;
+  supabaseUrl?: string;
+  anonKey?: string;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const COLUMNS = 'id,slot_start,name,phone,email,notes,status';
+
+/**
+ * Staff status change (confirm / cancel / no_show). Runs with the staff JWT so RLS applies.
+ * The UPDATE is conditional on the status we validated (compare-and-set), so concurrent
+ * changes cannot be overwritten. updated_at is set explicitly (and by the DB trigger);
+ * cancelled_by is 'staff' only for cancel.
+ */
+export async function transitionAppointment(
+  id: unknown,
+  action: unknown,
+  deps: TransitionDeps,
+): Promise<TransitionResult> {
+  if (!deps.token) return { ok: false, status: 401, error: 'Unauthorized' };
+  try {
+    if (!(await deps.isAuthenticated(deps.token))) return { ok: false, status: 401, error: 'Unauthorized' };
+  } catch {
+    return { ok: false, status: 503, error: 'Service unavailable' };
+  }
+  if (typeof id !== 'string' || !UUID_RE.test(id)) return { ok: false, status: 400, error: 'Invalid id' };
+  if (!isStaffAction(action)) return { ok: false, status: 400, error: 'Invalid action' };
+
+  const url = deps.supabaseUrl ?? process.env.SUPABASE_URL;
+  const key = deps.anonKey ?? (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!url || !key) return { ok: false, status: 503, error: 'Service unavailable' };
+  const f = deps.fetchImpl ?? fetch;
+  const headers = { apikey: key, Authorization: `Bearer ${deps.token}`, 'Content-Type': 'application/json' };
+  const unauth = (s: number) => s === 401 || s === 403;
+
+  try {
+    const getRes = await f(`${url}/rest/v1/appointments?select=${COLUMNS}&id=eq.${id}`, {
+      headers,
+      cache: 'no-store',
+    });
+    if (unauth(getRes.status)) return { ok: false, status: 401, error: 'Unauthorized' };
+    if (!getRes.ok) return { ok: false, status: 503, error: 'Service unavailable' };
+    const rows = (await getRes.json()) as StaffAppointment[];
+    const current = rows[0];
+    if (!current) return { ok: false, status: 404, error: 'Appointment not found' };
+
+    if (!allowedActions(current.status, current.slot_start, deps.now).includes(action)) {
+      return { ok: false, status: 409, error: 'Action not allowed for this appointment' };
+    }
+
+    const nowIso = deps.now.toISOString();
+    const patch =
+      action === 'confirm'
+        ? { status: 'confirmed', updated_at: nowIso }
+        : action === 'cancel'
+          ? { status: 'cancelled', cancelled_by: 'staff', updated_at: nowIso }
+          : { status: 'no_show', updated_at: nowIso };
+
+    const patchRes = await f(
+      `${url}/rest/v1/appointments?id=eq.${id}&status=eq.${current.status}&select=${COLUMNS}`,
+      { method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' }, body: JSON.stringify(patch) },
+    );
+    if (unauth(patchRes.status)) return { ok: false, status: 401, error: 'Unauthorized' };
+    if (!patchRes.ok) return { ok: false, status: 503, error: 'Service unavailable' };
+    const updated = (await patchRes.json()) as StaffAppointment[];
+    if (!updated[0]) return { ok: false, status: 409, error: 'Appointment was changed by someone else' };
+    return { ok: true, appointment: updated[0] };
+  } catch {
+    return { ok: false, status: 503, error: 'Service unavailable' };
+  }
+}
 
 /** Selectable range (inclusive, YYYY-MM-DD) in clinic local time. */
 export function allowedDateRange(now: Date, tz: string): { min: string; max: string; today: string } {
