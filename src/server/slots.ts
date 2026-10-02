@@ -61,7 +61,7 @@ export function isValidDateString(date: string): boolean {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m! - 1 && dt.getUTCDate() === d;
 }
 
-function addDays(date: string, n: number): string {
+export function addDays(date: string, n: number): string {
   const [y, m, d] = date.split('-').map(Number);
   return new Date(Date.UTC(y!, m! - 1, d! + n)).toISOString().slice(0, 10);
 }
