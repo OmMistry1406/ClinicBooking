@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Staff password policy (also set in Supabase Auth settings). 72 = bcrypt byte limit. */
+export const MIN_PASSWORD_LENGTH = 12;
+export const MAX_PASSWORD_LENGTH = 72;
+
 export const bookingSchema = z.object({
   name: z
     .string()
