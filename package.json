@@ -14,7 +14,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "migrate": "node scripts/migrate.mjs"
+    "migrate": "node scripts/migrate.mjs",
+    "create-staff": "node scripts/create-staff.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
