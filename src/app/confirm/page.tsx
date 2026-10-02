@@ -1,3 +1,7 @@
+import { loadConfig } from '@/lib/config';
+import { findActiveSlotByToken } from '@/lib/supabase/admin';
+import { formatSlot, isPlausibleToken, lookupAppointment } from '@/server/cancel';
+
 export const dynamic = 'force-dynamic';
 
 export default async function ConfirmPage({
@@ -6,21 +10,39 @@ export default async function ConfirmPage({
   searchParams: Promise<{ token?: string }>;
 }) {
   const { token } = await searchParams;
-  const valid = typeof token === 'string' && /^[A-Za-z0-9_-]{20,64}$/.test(token);
+  let slot: { date: string; time: string } | null = null;
+  if (isPlausibleToken(token)) {
+    try {
+      const config = loadConfig();
+      const res = await lookupAppointment(token, {
+        findActiveSlot: (t) => findActiveSlotByToken(t),
+        cancel: async () => false,
+      });
+      if (res.found) slot = formatSlot(res.slotStart, config.clinicTz);
+    } catch {
+      slot = null;
+    }
+  }
   return (
     <main className="mx-auto max-w-xl p-4">
-      <h1 className="text-2xl font-semibold">Appointment requested</h1>
-      <p className="mt-2">
-        Your appointment request has been received and is pending confirmation by the clinic.
-      </p>
-      {valid && (
-        <p className="mt-4">
-          Need to cancel? Use your{' '}
-          <a className="text-blue-700 underline" href={`/cancel/${token}`}>
-            personal cancellation link
-          </a>
-          . Keep this link private.
+      <h1 className="text-2xl font-semibold">Your appointment has been confirmed.</h1>
+      {slot && (
+        <p className="mt-2">
+          Date: <strong>{slot.date}</strong>
+          <br />
+          Time: <strong>{slot.time}</strong>
         </p>
+      )}
+      {slot && isPlausibleToken(token) && (
+        <div className="mt-4">
+          <p>Your private cancellation link (keep it private):</p>
+          <a className="break-all text-blue-700 underline" href={`/cancel/${token}`}>
+            {`/cancel/${token}`}
+          </a>
+          <p className="mt-2">
+            You can cancel this appointment using the link above until {slot.time} on {slot.date}.
+          </p>
+        </div>
       )}
     </main>
   );

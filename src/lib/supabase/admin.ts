@@ -29,6 +29,44 @@ export interface AppointmentRow {
 
 export type InsertResult = { ok: true } | { ok: false; code: 'slot_taken' | 'unavailable' };
 
+/** Selects ONLY slot_start (no PII) for a non-cancelled appointment with this token. */
+export async function findActiveSlotByToken(
+  token: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | null> {
+  const res = await fetchImpl(
+    adminUrl(
+      `/rest/v1/appointments?select=slot_start&cancel_token=eq.${encodeURIComponent(token)}&status=neq.cancelled&limit=1`,
+    ),
+    { headers: adminHeaders(), cache: 'no-store' },
+  );
+  if (!res.ok) throw new Error('lookup failed');
+  const rows = (await res.json()) as Array<{ slot_start: string }>;
+  return rows[0]?.slot_start ?? null;
+}
+
+/** Patient cancellation: single conditional UPDATE. Returns true if a row changed. */
+export async function cancelAppointmentByToken(
+  token: string,
+  nowIso: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
+  const res = await fetchImpl(
+    adminUrl(
+      `/rest/v1/appointments?select=id&cancel_token=eq.${encodeURIComponent(token)}&status=neq.cancelled`,
+    ),
+    {
+      method: 'PATCH',
+      headers: { ...adminHeaders(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ status: 'cancelled', cancelled_by: 'patient', updated_at: nowIso }),
+      cache: 'no-store',
+    },
+  );
+  if (!res.ok) throw new Error('cancel failed');
+  const rows = (await res.json()) as unknown[];
+  return rows.length > 0;
+}
+
 /** Inserts an appointment. Maps Postgres unique violation 23505 to 'slot_taken'. Never check-then-insert. */
 export async function insertAppointment(
   row: AppointmentRow,
