@@ -1,0 +1,17 @@
+node_modules
+.next
+.vercel
+out
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# env files (keep the example)
+.env
+.env.local
+.env*.local
+env.local
+!.env.example
+
+npm-debug.log*
+.DS_Store

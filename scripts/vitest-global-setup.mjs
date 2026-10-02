@@ -1,0 +1,98 @@
+// Vitest global setup: the acceptance suite talks HTTP to 127.0.0.1:3000.
+// If nothing is listening there, build (if needed) and start the app so `npm test` is self-contained.
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import http from 'node:http';
+import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const PORT = '3000';
+let child = null;
+let mock = null;
+
+function healthy() {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${PORT}/api/health`, (res) => {
+      res.resume();
+      resolve(true); // any HTTP response means a server is listening
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(2000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+function listening(port) {
+  return new Promise((resolve) => {
+    const s = net.connect(Number(port), '127.0.0.1');
+    s.on('connect', () => {
+      s.destroy();
+      resolve(true);
+    });
+    s.on('error', () => resolve(false));
+  });
+}
+
+export async function setup() {
+  if (await healthy()) return;
+
+  const env = {
+    CLINIC_TZ: 'UTC',
+    HOLIDAYS: '2026-10-08,2026-12-25,2027-01-01',
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
+    TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+    ...process.env,
+    PORT,
+    NODE_ENV: 'production',
+  };
+  const shell = process.platform === 'win32';
+
+  // No Supabase configured: run against the in-memory stand-in so the suite is self-contained/offline.
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    // Always use a free ephemeral port: 54321 is the local Supabase CLI's port and may be occupied,
+    // in which case the mock would crash and the app would talk to the wrong service.
+    const mockPort = env.MOCK_SUPABASE_PORT || String(await freePort());
+    env.SUPABASE_URL = `http://127.0.0.1:${mockPort}`;
+    env.SUPABASE_SERVICE_ROLE_KEY = 'mock-service-role-key';
+    mock = spawn(process.execPath, [path.join(root, 'scripts', 'mock-supabase.mjs'), mockPort], {
+      cwd: root,
+      env,
+      stdio: 'inherit',
+    });
+    for (let i = 0; i < 50 && !(await listening(mockPort)); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  if (!existsSync(path.join(root, '.next', 'BUILD_ID'))) {
+    const r = spawnSync('npm', ['run', 'build'], { cwd: root, env, stdio: 'inherit', shell });
+    if (r.status !== 0) throw new Error('npm run build failed');
+  }
+
+  child = spawn('npm', ['start'], { cwd: root, env, stdio: 'inherit', shell });
+  for (let i = 0; i < 120; i++) {
+    if (await healthy()) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error('Server did not become available on port 3000');
+}
+
+export async function teardown() {
+  if (child) child.kill('SIGTERM');
+  if (mock) mock.kill('SIGTERM');
+}
