@@ -53,7 +53,8 @@ Copy `.env.example` to `.env.local` (git-ignored).
 1. Push the repository to GitHub/GitLab and import it in Vercel (framework preset: Next.js), or run
    `npx vercel link` locally to connect an existing project.
 2. `vercel.json` already sets install/build commands and security headers (HSTS). Vercel redirects
-   HTTP to HTTPS automatically.
+   HTTP to HTTPS automatically. Once `package-lock.json` is committed, you can switch `installCommand`
+   to `npm ci --no-audit --no-fund` for reproducible installs.
 3. Add all environment variables above under Project Settings → Environment Variables
    (Production and Preview). Set `CLINIC_TZ` explicitly.
 4. Deploy, then check `https://<your-domain>/api/health` returns `{"status":"ok"}`.
