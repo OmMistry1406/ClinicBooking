@@ -102,6 +102,24 @@ describe('generateSlots', () => {
     expect(syd[0]).toBe('2026-03-01T22:00:00.000Z'); // AEDT +11
   });
 
+  it('applies "today" cut-off and holidays in the clinic zone, not UTC', () => {
+    // 2026-04-01 22:30 UTC is already 23:30 BST on 1 Apr; at 23:30 UTC on 31 Mar it is 00:30 BST on 1 Apr.
+    const base = { date: '2026-04-01', tz: 'Europe/London', schedule, holidays: [] };
+    const s = generateSlots({ ...base, now: new Date('2026-04-01T08:00:00Z') }); // 09:00 BST
+    expect(s[0]).toBe('2026-04-01T08:15:00.000Z');
+    expect(s).toHaveLength(27);
+    expect(generateSlots({ ...base, holidays: ['2026-04-01'], now })).toEqual([]);
+    // weekend in London
+    expect(generateSlots({ ...base, date: '2026-04-04', now })).toEqual([]);
+    expect(generateSlots({ ...base, date: '2026-04-05', now })).toEqual([]);
+  });
+
+  it('excludes holidays from slot validation', () => {
+    const input = { tz: 'UTC', schedule, holidays: ['2026-03-02'], now };
+    expect(isValidSlotStart('2026-03-02T09:00:00Z', input)).toBe(false);
+    expect(isValidSlotStart('2026-03-03T09:00:00Z', input)).toBe(true);
+  });
+
   it('detects nonexistent DST-gap times', () => {
     expect(zonedToUtc('2026-03-08', 150, 'America/New_York')).toBeNull();
   });

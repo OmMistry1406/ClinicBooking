@@ -8,5 +8,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    coverage: {
+      include: ['src/server/slots.ts'],
+      thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
+    },
   },
 });
