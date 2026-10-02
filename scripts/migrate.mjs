@@ -24,6 +24,8 @@ try {
   await client.query(
     'create table if not exists public.schema_migrations (name text primary key, applied_at timestamptz not null default now())',
   );
+  // Keep the bookkeeping table unreachable through the public REST API.
+  await client.query('alter table public.schema_migrations enable row level security');
   const { rows } = await client.query('select name from public.schema_migrations');
   const applied = new Set(rows.map((r) => r.name));
 
