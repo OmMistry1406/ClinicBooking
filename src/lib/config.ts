@@ -71,10 +71,10 @@ function parseSchedule(env: Record<string, string | undefined>): Schedule {
   return {
     openMinutes: parseHm(env.OPEN_TIME, '09:00', 'OPEN_TIME'),
     closeMinutes: parseHm(env.CLOSE_TIME, '17:00', 'CLOSE_TIME'),
-    lunchStartMinutes: parseHm(env.LUNCH_START, '12:00', 'LUNCH_START'),
-    lunchEndMinutes: parseHm(env.LUNCH_END, '13:00', 'LUNCH_END'),
-    slotMinutes: parseIntEnv(env.SLOT_MINUTES, 30, 'SLOT_MINUTES'),
-    windowDays: parseIntEnv(env.BOOKING_WINDOW_DAYS, 30, 'BOOKING_WINDOW_DAYS'),
+    lunchStartMinutes: parseHm(env.LUNCH_START, '13:00', 'LUNCH_START'),
+    lunchEndMinutes: parseHm(env.LUNCH_END, '14:00', 'LUNCH_END'),
+    slotMinutes: parseIntEnv(env.SLOT_MINUTES, 15, 'SLOT_MINUTES'),
+    windowDays: parseIntEnv(env.BOOKING_WINDOW_DAYS, 90, 'BOOKING_WINDOW_DAYS'),
     openWeekdays: days,
   };
 }
